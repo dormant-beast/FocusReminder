@@ -1,0 +1,462 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create all project files
+        run: |
+          set -e
+
+          # Root files
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "FocusReminder"
+          include ':app'
+          EOF
+
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
+          }
+          EOF
+
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          # App module
+          mkdir -p app/src/main/java/com/example/focusreminder
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+
+          android {
+              namespace 'com.example.focusreminder'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.example.focusreminder"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = '17' }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'androidx.core:core-ktx:1.13.1'
+              implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+              <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+                  tools:ignore="ProtectedPermissions"/>
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
+              <application
+                  android:allowBackup="true"
+                  android:label="FocusReminder"
+                  android:icon="@android:drawable/ic_lock_idle_alarm"
+                  android:theme="@style/Theme.AppCompat.DayNight">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".ReminderService"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="reminder"/>
+                  </service>
+
+                  <receiver
+                      android:name=".BootReceiver"
+                      android:enabled="true"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                      </intent-filter>
+                  </receiver>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="32dp">
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="FocusReminder"
+                  android:textSize="28sp"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="40dp"/>
+
+              <Button
+                  android:id="@+id/btnStart"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Reminder chalu koro"/>
+
+              <Button
+                  android:id="@+id/btnStop"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_marginTop="16dp"
+                  android:text="Reminder bondho koro"/>
+          </LinearLayout>
+          EOF
+
+          cat > app/src/main/res/values/strings.xml << 'EOF'
+          <resources>
+              <string name="app_name">FocusReminder</string>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+          <resources>
+              <style name="Theme.AppCompat.DayNight" parent="Theme.AppCompat.DayNight.NoActionBar"/>
+          </resources>
+          EOF
+
+          # Kotlin files
+          cat > app/src/main/java/com/example/focusreminder/MainActivity.kt << 'EOF'
+          package com.example.focusreminder
+
+          import android.app.AppOpsManager
+          import android.content.Context
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.provider.Settings
+          import android.widget.Button
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.app.NotificationManagerCompat
+
+          class MainActivity : AppCompatActivity() {
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+                          requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
+                      }
+                  }
+
+                  if (!hasUsageAccess()) {
+                      Toast.makeText(this, "Usage Access permission dao", Toast.LENGTH_LONG).show()
+                      startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                  }
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                      if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                          val i = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                          i.data = Uri.parse("package:$packageName")
+                          startActivity(i)
+                      }
+                  }
+
+                  findViewById<Button>(R.id.btnStart).setOnClickListener {
+                      val i = Intent(this, ReminderService::class.java)
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
+                      else startService(i)
+                      Toast.makeText(this, "Reminder chalu", Toast.LENGTH_SHORT).show()
+                  }
+
+                  findViewById<Button>(R.id.btnStop).setOnClickListener {
+                      stopService(Intent(this, ReminderService::class.java))
+                      Toast.makeText(this, "Reminder bondho", Toast.LENGTH_SHORT).show()
+                  }
+              }
+
+              private fun hasUsageAccess(): Boolean {
+                  return try {
+                      val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                      val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                          appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                              android.os.Process.myUid(), packageName)
+                      } else {
+                          @Suppress("DEPRECATION")
+                          appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                              android.os.Process.myUid(), packageName)
+                      }
+                      mode == AppOpsManager.MODE_ALLOWED
+                  } catch (e: Exception) { false }
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/example/focusreminder/ReminderService.kt << 'EOF'
+          package com.example.focusreminder
+
+          import android.app.*
+          import android.app.usage.UsageStatsManager
+          import android.content.Context
+          import android.content.Intent
+          import android.os.Build
+          import android.os.IBinder
+          import android.speech.tts.TextToSpeech
+          import androidx.core.app.NotificationCompat
+          import kotlinx.coroutines.*
+          import java.util.*
+
+          class ReminderService : Service() {
+
+              private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+              private lateinit var tts: TextToSpeech
+
+              private val motivations = listOf(
+                  "Chaliye jao, tumi parbe.",
+                  "Tomar lokkho mone rekho.",
+                  "Ektu bishram nao, tarpor abar shuru koro.",
+                  "Shomoy mulloban, kaje mon dao.",
+                  "Tumi onek dur eshecho, theme jeyo na.",
+                  "Monojogii shafolloyer chabikathi.",
+                  "Nijer upor bishwas rakho.",
+                  "Prottiti muhurto guruttopurno."
+              )
+
+              override fun onCreate() {
+                  super.onCreate()
+                  startForegroundWithNotification()
+                  initTts()
+                  startHourlyReminder()
+                  startAppUsageWatcher()
+              }
+
+              private fun startForegroundWithNotification() {
+                  val channelId = "focus_service"
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val nm = getSystemService(NotificationManager::class.java)
+                      nm.createNotificationChannel(NotificationChannel(
+                          channelId, "Focus Service", NotificationManager.IMPORTANCE_LOW))
+                  }
+                  val notif = NotificationCompat.Builder(this, channelId)
+                      .setContentTitle("FocusReminder chalu")
+                      .setContentText("Tomake mone koriye dichhi...")
+                      .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                      .setOngoing(true)
+                      .build()
+                  startForeground(1, notif)
+              }
+
+              private fun initTts() {
+                  tts = TextToSpeech(this) { status ->
+                      if (status == TextToSpeech.SUCCESS) {
+                          val res = tts.setLanguage(Locale("bn", "BD"))
+                          if (res == TextToSpeech.LANG_MISSING_DATA ||
+                              res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                              tts.language = Locale.US
+                          }
+                      }
+                  }
+              }
+
+              private fun startHourlyReminder() {
+                  scope.launch {
+                      while (isActive) {
+                          delay(60 * 60 * 1000L)
+                          val msg = motivations.random()
+                          speak("Ek ghonta hoye geche. $msg")
+                          showNotification("Ghontar reminder", msg)
+                      }
+                  }
+              }
+
+              private fun startAppUsageWatcher() {
+                  scope.launch {
+                      val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                      var lastPackage = ""
+                      var startTime = 0L
+
+                      while (isActive) {
+                          delay(30 * 1000L)
+                          val current = getForegroundPackage(usm) ?: continue
+
+                          if (current != packageName && current != "com.android.systemui") {
+                              if (current != lastPackage) {
+                                  lastPackage = current
+                                  startTime = System.currentTimeMillis()
+                              } else {
+                                  val elapsed = (System.currentTimeMillis() - startTime) / 1000 / 60
+                                  if (elapsed == 10L || elapsed == 15L || elapsed == 20L) {
+                                      val appName = getAppName(current)
+                                      val msg = "Tumi $appName e $elapsed minute dhore achho. Ektu biroti nao!"
+                                      speak(msg)
+                                      showNotification("App Usage Warning", msg)
+                                  }
+                              }
+                          } else {
+                              lastPackage = ""
+                              startTime = 0L
+                          }
+                      }
+                  }
+              }
+
+              private fun getForegroundPackage(usm: UsageStatsManager): String? {
+                  val end = System.currentTimeMillis()
+                  val begin = end - 1000 * 60 * 5
+                  val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, begin, end) ?: return null
+                  return stats.maxByOrNull { it.lastTimeUsed }?.packageName
+              }
+
+              private fun getAppName(pkg: String): String = try {
+                  val ai = packageManager.getApplicationInfo(pkg, 0)
+                  packageManager.getApplicationLabel(ai).toString()
+              } catch (e: Exception) { pkg }
+
+              private fun speak(text: String) {
+                  tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "r_${System.currentTimeMillis()}")
+              }
+
+              private fun showNotification(title: String, msg: String) {
+                  val channelId = "focus_alerts"
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val nm = getSystemService(NotificationManager::class.java)
+                      nm.createNotificationChannel(NotificationChannel(
+                          channelId, "Alerts", NotificationManager.IMPORTANCE_HIGH))
+                  }
+                  val notif = NotificationCompat.Builder(this, channelId)
+                      .setContentTitle(title)
+                      .setContentText(msg)
+                      .setSmallIcon(android.R.drawable.ic_dialog_info)
+                      .setAutoCancel(true)
+                      .build()
+                  getSystemService(NotificationManager::class.java)
+                      .notify(System.currentTimeMillis().toInt(), notif)
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
+              override fun onBind(intent: Intent?): IBinder? = null
+
+              override fun onDestroy() {
+                  scope.cancel()
+                  if (::tts.isInitialized) { tts.stop(); tts.shutdown() }
+                  super.onDestroy()
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/example/focusreminder/BootReceiver.kt << 'EOF'
+          package com.example.focusreminder
+
+          import android.content.BroadcastReceiver
+          import android.content.Context
+          import android.content.Intent
+          import android.os.Build
+
+          class BootReceiver : BroadcastReceiver() {
+              override fun onReceive(context: Context, intent: Intent) {
+                  if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+                      val i = Intent(context, ReminderService::class.java)
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                          context.startForegroundService(i)
+                      else context.startService(i)
+                  }
+              }
+          }
+          EOF
+
+          # Gradle wrapper
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          echo "All files created successfully"
+          find . -type f -name "*.gradle" -o -name "*.kt" -o -name "*.xml" | head -30
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FocusReminder-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
