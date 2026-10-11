@@ -16,7 +16,6 @@ jobs:
         run: |
           set -e
 
-          # Root files
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
@@ -50,10 +49,10 @@ jobs:
           android.nonTransitiveRClass=true
           EOF
 
-          # App module
           mkdir -p app/src/main/java/com/example/focusreminder
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
           cat > app/build.gradle << 'EOF'
           plugins {
@@ -69,8 +68,8 @@ jobs:
                   applicationId "com.example.focusreminder"
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
+                  versionCode 3
+                  versionName "2.0"
               }
 
               buildTypes {
@@ -104,6 +103,9 @@ jobs:
                   tools:ignore="ProtectedPermissions"/>
               <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+              <uses-permission android:name="android.permission.VIBRATE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
 
               <application
                   android:allowBackup="true"
@@ -130,6 +132,16 @@ jobs:
                           android:value="reminder"/>
                   </service>
 
+                  <service
+                      android:name=".FloatingOrbService"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="overlay"/>
+                  </service>
+
                   <receiver
                       android:name=".BootReceiver"
                       android:enabled="true"
@@ -144,34 +156,105 @@ jobs:
 
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="32dp">
+              android:background="#0A0E1A">
 
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="FocusReminder"
-                  android:textSize="28sp"
-                  android:textStyle="bold"
-                  android:layout_marginBottom="40dp"/>
-
-              <Button
-                  android:id="@+id/btnStart"
+              <LinearLayout
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:text="Reminder chalu koro"/>
+                  android:orientation="vertical"
+                  android:gravity="center"
+                  android:padding="24dp">
 
-              <Button
-                  android:id="@+id/btnStop"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:layout_marginTop="16dp"
-                  android:text="Reminder bondho koro"/>
-          </LinearLayout>
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="FOCUS REMINDER"
+                      android:textSize="26sp"
+                      android:textStyle="bold"
+                      android:textColor="#00E5FF"
+                      android:letterSpacing="0.2"
+                      android:layout_marginBottom="8dp"/>
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="Wake up. Focus. Win."
+                      android:textSize="14sp"
+                      android:textColor="#7CFFB2"
+                      android:layout_marginBottom="28dp"/>
+
+                  <TextView
+                      android:id="@+id/tvStatus"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="Status: OFF"
+                      android:textSize="15sp"
+                      android:textColor="#FFFFFF"
+                      android:padding="14dp"
+                      android:background="#1A2238"
+                      android:layout_marginBottom="16dp"/>
+
+                  <Button
+                      android:id="@+id/btnOverlay"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="Neon Orb ON koro"
+                      android:backgroundTint="#00E5FF"
+                      android:textColor="#0A0E1A"
+                      android:textStyle="bold"/>
+
+                  <Button
+                      android:id="@+id/btnStart"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="10dp"
+                      android:text="Reminder chalu koro"
+                      android:backgroundTint="#7CFFB2"
+                      android:textColor="#0A0E1A"
+                      android:textStyle="bold"/>
+
+                  <Button
+                      android:id="@+id/btnStop"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="10dp"
+                      android:text="Reminder bondho koro"
+                      android:backgroundTint="#FF4D6D"
+                      android:textColor="#FFFFFF"/>
+
+                  <Button
+                      android:id="@+id/btnTest"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="10dp"
+                      android:text="Test (10 sec)"
+                      android:backgroundTint="#FFB703"
+                      android:textColor="#0A0E1A"/>
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="24dp"
+                      android:text="Live Log"
+                      android:textColor="#00E5FF"
+                      android:textStyle="bold"/>
+
+                  <TextView
+                      android:id="@+id/tvLog"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="(no log)"
+                      android:textSize="11sp"
+                      android:textColor="#B0BEC5"
+                      android:fontFamily="monospace"
+                      android:padding="10dp"
+                      android:background="#1A2238"
+                      android:layout_marginTop="8dp"/>
+              </LinearLayout>
+          </ScrollView>
           EOF
 
           cat > app/src/main/res/values/strings.xml << 'EOF'
@@ -186,27 +269,56 @@ jobs:
           </resources>
           EOF
 
-          # Kotlin files
+          cat > app/src/main/res/drawable/orb_bg.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="oval">
+              <gradient
+                  android:startColor="#00E5FF"
+                  android:centerColor="#7C4DFF"
+                  android:endColor="#00FFA3"
+                  android:type="radial"
+                  android:gradientRadius="80"/>
+              <stroke android:width="2dp" android:color="#FFFFFF"/>
+          </shape>
+          EOF
+
           cat > app/src/main/java/com/example/focusreminder/MainActivity.kt << 'EOF'
           package com.example.focusreminder
 
           import android.app.AppOpsManager
+          import android.content.BroadcastReceiver
           import android.content.Context
           import android.content.Intent
+          import android.content.IntentFilter
           import android.net.Uri
           import android.os.Build
           import android.os.Bundle
           import android.provider.Settings
           import android.widget.Button
+          import android.widget.TextView
           import android.widget.Toast
           import androidx.appcompat.app.AppCompatActivity
           import androidx.core.app.NotificationManagerCompat
 
           class MainActivity : AppCompatActivity() {
 
+              private lateinit var tvLog: TextView
+              private lateinit var tvStatus: TextView
+
+              private val logReceiver = object : BroadcastReceiver() {
+                  override fun onReceive(context: Context?, intent: Intent?) {
+                      val msg = intent?.getStringExtra("log") ?: return
+                      tvLog.append("\n$msg")
+                  }
+              }
+
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
+
+                  tvLog = findViewById(R.id.tvLog)
+                  tvStatus = findViewById(R.id.tvStatus)
 
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                       if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
@@ -228,17 +340,62 @@ jobs:
                       }
                   }
 
+                  if (!Settings.canDrawOverlays(this)) {
+                      Toast.makeText(this, "Floating orb er jonno overlay permission dao", Toast.LENGTH_LONG).show()
+                      val i = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                          Uri.parse("package:$packageName"))
+                      startActivity(i)
+                  }
+
+                  findViewById<Button>(R.id.btnOverlay).setOnClickListener {
+                      if (!Settings.canDrawOverlays(this)) {
+                          startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                              Uri.parse("package:$packageName")))
+                      } else {
+                          val i = Intent(this, FloatingOrbService::class.java)
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
+                          else startService(i)
+                          Toast.makeText(this, "Neon Orb ON", Toast.LENGTH_SHORT).show()
+                      }
+                  }
+
                   findViewById<Button>(R.id.btnStart).setOnClickListener {
                       val i = Intent(this, ReminderService::class.java)
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
                       else startService(i)
+                      tvStatus.text = "Status: ACTIVE"
                       Toast.makeText(this, "Reminder chalu", Toast.LENGTH_SHORT).show()
                   }
 
                   findViewById<Button>(R.id.btnStop).setOnClickListener {
                       stopService(Intent(this, ReminderService::class.java))
+                      tvStatus.text = "Status: OFF"
                       Toast.makeText(this, "Reminder bondho", Toast.LENGTH_SHORT).show()
                   }
+
+                  findViewById<Button>(R.id.btnTest).setOnClickListener {
+                      val i = Intent(this, ReminderService::class.java)
+                      i.putExtra("test_mode", true)
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
+                      else startService(i)
+                      tvStatus.text = "Status: TEST"
+                      Toast.makeText(this, "Test - 10 sec por reminder", Toast.LENGTH_SHORT).show()
+                  }
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  val filter = IntentFilter("com.example.focusreminder.LOG")
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      registerReceiver(logReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                  } else {
+                      registerReceiver(logReceiver, filter)
+                  }
+              }
+
+              override fun onPause() {
+                  super.onPause()
+                  try { unregisterReceiver(logReceiver) } catch (e: Exception) {}
               }
 
               private fun hasUsageAccess(): Boolean {
@@ -262,11 +419,15 @@ jobs:
           package com.example.focusreminder
 
           import android.app.*
+          import android.app.usage.UsageEvents
           import android.app.usage.UsageStatsManager
           import android.content.Context
           import android.content.Intent
+          import android.media.AudioManager
           import android.os.Build
           import android.os.IBinder
+          import android.os.VibrationEffect
+          import android.os.Vibrator
           import android.speech.tts.TextToSpeech
           import androidx.core.app.NotificationCompat
           import kotlinx.coroutines.*
@@ -276,24 +437,48 @@ jobs:
 
               private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
               private lateinit var tts: TextToSpeech
+              private var testMode = false
 
-              private val motivations = listOf(
-                  "Chaliye jao, tumi parbe.",
-                  "Tomar lokkho mone rekho.",
-                  "Ektu bishram nao, tarpor abar shuru koro.",
-                  "Shomoy mulloban, kaje mon dao.",
-                  "Tumi onek dur eshecho, theme jeyo na.",
-                  "Monojogii shafolloyer chabikathi.",
-                  "Nijer upor bishwas rakho.",
-                  "Prottiti muhurto guruttopurno."
+              private val aggressiveMotivations = listOf(
+                  "Ei! Ghumiye achho naki? Uthe daro, tomar shomoy chole jacche!",
+                  "Ei bhabe cholbe na. Tomar shopno tomar jonno wait korche, kaj e mon dao!",
+                  "Bondhu, phone rekhe diye kaj dhoro. Aj ki korte chao, bhule jao na!",
+                  "Ei shomoy ta ar fire ashbe na. Ekhon na kaj korle kokhono korbe na!",
+                  "Tomar cheye onek durbol manush tomar cheye beshi porishrom korche. Lojja hobe na?",
+                  "Phone ta rakho! Tomar life tomar hate. Focus!",
+                  "Tumi ki eibhabe hariye jete chao? Utho, lOrbo!",
+                  "Bondho koro ei video. Tomar lokkho mone ache? Ekhon e kaj shuru koro!",
+                  "Are, ei to tomar shomoy churi hoye jacche. Ekhon e theme jao!",
+                  "Ei phone tomar gulam na. Tumi malik. Control koro nijer!"
+              )
+
+              private val warnings = listOf(
+                  "Tumi eto khon dhore video dekhcho, ei shomoy ta diye kichu boro korte parhte!",
+                  "Ei app ta bondho koro. Tomar future tomar opor depend korche.",
+                  "Eto khon social media, eto khon video, tarpor ki? Kaj kobe?",
+                  "Ei bhabe cholle kichui hobe na. Ekhon e phone rekhe dao!"
               )
 
               override fun onCreate() {
                   super.onCreate()
                   startForegroundWithNotification()
                   initTts()
-                  startHourlyReminder()
-                  startAppUsageWatcher()
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  testMode = intent?.getBooleanExtra("test_mode", false) ?: false
+                  log("Service started. testMode=$testMode")
+
+                  if (testMode) {
+                      scope.launch {
+                          delay(10 * 1000L)
+                          triggerReminder(aggressiveMotivations.random(), true)
+                      }
+                  } else {
+                      scope.launch { startHourlyReminder() }
+                      scope.launch { startAppUsageWatcher() }
+                  }
+                  return START_STICKY
               }
 
               private fun startForegroundWithNotification() {
@@ -304,8 +489,8 @@ jobs:
                           channelId, "Focus Service", NotificationManager.IMPORTANCE_LOW))
                   }
                   val notif = NotificationCompat.Builder(this, channelId)
-                      .setContentTitle("FocusReminder chalu")
-                      .setContentText("Tomake mone koriye dichhi...")
+                      .setContentTitle("FocusReminder ACTIVE")
+                      .setContentText("Tomar lokkho mone rekhe...")
                       .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                       .setOngoing(true)
                       .build()
@@ -320,6 +505,8 @@ jobs:
                               res == TextToSpeech.LANG_NOT_SUPPORTED) {
                               tts.language = Locale.US
                           }
+                          tts.setSpeechRate(1.05f)
+                          tts.setPitch(1.1f)
                       }
                   }
               }
@@ -328,49 +515,93 @@ jobs:
                   scope.launch {
                       while (isActive) {
                           delay(60 * 60 * 1000L)
-                          val msg = motivations.random()
-                          speak("Ek ghonta hoye geche. $msg")
-                          showNotification("Ghontar reminder", msg)
+                          triggerReminder(aggressiveMotivations.random(), false)
                       }
                   }
               }
 
               private fun startAppUsageWatcher() {
                   scope.launch {
-                      val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-                      var lastPackage = ""
-                      var startTime = 0L
-
                       while (isActive) {
-                          delay(30 * 1000L)
-                          val current = getForegroundPackage(usm) ?: continue
-
-                          if (current != packageName && current != "com.android.systemui") {
-                              if (current != lastPackage) {
-                                  lastPackage = current
-                                  startTime = System.currentTimeMillis()
-                              } else {
-                                  val elapsed = (System.currentTimeMillis() - startTime) / 1000 / 60
-                                  if (elapsed == 10L || elapsed == 15L || elapsed == 20L) {
+                          delay(15 * 1000L)
+                          try {
+                              val current = getForegroundPackage()
+                              if (current != null && current != packageName &&
+                                  current != "com.android.systemui") {
+                                  val info = AppTracker.onForeground(current)
+                                  if (info != null) {
                                       val appName = getAppName(current)
-                                      val msg = "Tumi $appName e $elapsed minute dhore achho. Ektu biroti nao!"
-                                      speak(msg)
-                                      showNotification("App Usage Warning", msg)
+                                      val msg = "$appName e ${info} minute! ${warnings.random()}"
+                                      triggerReminder(msg, true)
                                   }
+                              } else {
+                                  AppTracker.reset()
                               }
-                          } else {
-                              lastPackage = ""
-                              startTime = 0L
+                          } catch (e: Exception) {
+                              log("Error: ${e.message}")
                           }
                       }
                   }
               }
 
-              private fun getForegroundPackage(usm: UsageStatsManager): String? {
+              private fun triggerReminder(text: String, pauseMedia: Boolean) {
+                  log(text)
+                  speak(text)
+                  if (pauseMedia) pauseMediaPlayback()
+                  vibrate()
+                  showNotification("Bondhu, mon dao!", text)
+                  val orbIntent = Intent(this, FloatingOrbService::class.java)
+                  orbIntent.putExtra("text", text)
+                  orbIntent.action = "SHOW_MESSAGE"
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(orbIntent)
+                  else startService(orbIntent)
+              }
+
+              private fun pauseMediaPlayback() {
+                  try {
+                      val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          am.requestAudioFocus(null, AudioManager.STREAM_MUSIC,
+                              AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                      } else {
+                          @Suppress("DEPRECATION")
+                          am.requestAudioFocus(null, AudioManager.STREAM_MUSIC,
+                              AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                      }
+                      scope.launch {
+                          delay(8000)
+                          am.abandonAudioFocus(null)
+                      }
+                  } catch (e: Exception) { log("audio: ${e.message}") }
+              }
+
+              private fun vibrate() {
+                  try {
+                      val v = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          v.vibrate(VibrationEffect.createWaveform(
+                              longArrayOf(0, 200, 100, 200, 100, 400), -1))
+                      } else {
+                          @Suppress("DEPRECATION")
+                          v.vibrate(longArrayOf(0, 200, 100, 200, 100, 400), -1)
+                      }
+                  } catch (e: Exception) {}
+              }
+
+              private fun getForegroundPackage(): String? {
+                  val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
                   val end = System.currentTimeMillis()
-                  val begin = end - 1000 * 60 * 5
-                  val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, begin, end) ?: return null
-                  return stats.maxByOrNull { it.lastTimeUsed }?.packageName
+                  val begin = end - 1000 * 60 * 60
+                  val events = usm.queryEvents(begin, end)
+                  var lastPackage: String? = null
+                  val event = UsageEvents.Event()
+                  while (events.hasNextEvent()) {
+                      events.getNextEvent(event)
+                      if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                          lastPackage = event.packageName
+                      }
+                  }
+                  return lastPackage
               }
 
               private fun getAppName(pkg: String): String = try {
@@ -379,7 +610,9 @@ jobs:
               } catch (e: Exception) { pkg }
 
               private fun speak(text: String) {
-                  tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "r_${System.currentTimeMillis()}")
+                  if (::tts.isInitialized) {
+                      tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "r_${System.currentTimeMillis()}")
+                  }
               }
 
               private fun showNotification(title: String, msg: String) {
@@ -392,6 +625,7 @@ jobs:
                   val notif = NotificationCompat.Builder(this, channelId)
                       .setContentTitle(title)
                       .setContentText(msg)
+                      .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
                       .setSmallIcon(android.R.drawable.ic_dialog_info)
                       .setAutoCancel(true)
                       .build()
@@ -399,7 +633,12 @@ jobs:
                       .notify(System.currentTimeMillis().toInt(), notif)
               }
 
-              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
+              private fun log(msg: String) {
+                  val i = Intent("com.example.focusreminder.LOG")
+                  i.putExtra("log", "${System.currentTimeMillis() % 100000}: $msg")
+                  sendBroadcast(i)
+              }
+
               override fun onBind(intent: Intent?): IBinder? = null
 
               override fun onDestroy() {
@@ -408,55 +647,259 @@ jobs:
                   super.onDestroy()
               }
           }
-          EOF
 
-          cat > app/src/main/java/com/example/focusreminder/BootReceiver.kt << 'EOF'
-          package com.example.focusreminder
+          object AppTracker {
+              private var lastPackage: String = ""
+              private var startTime: Long = 0L
+              private val warnedMinutes = mutableSetOf<Int>()
 
-          import android.content.BroadcastReceiver
-          import android.content.Context
-          import android.content.Intent
-          import android.os.Build
-
-          class BootReceiver : BroadcastReceiver() {
-              override fun onReceive(context: Context, intent: Intent) {
-                  if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-                      val i = Intent(context, ReminderService::class.java)
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                          context.startForegroundService(i)
-                      else context.startService(i)
+              fun onForeground(pkg: String): Int? {
+                  val now = System.currentTimeMillis()
+                  if (pkg != lastPackage) {
+                      lastPackage = pkg
+                      startTime = now
+                      warnedMinutes.clear()
+                      return null
                   }
+                  val minutes = ((now - startTime) / 60000).toInt()
+                  val rounded = (minutes / 5) * 5
+                  return if (rounded >= 10 && !warnedMinutes.contains(rounded)) {
+                      warnedMinutes.add(rounded)
+                      rounded
+                  } else null
+              }
+
+              fun reset() {
+                  lastPackage = ""
+                  startTime = 0L
+                  warnedMinutes.clear()
               }
           }
           EOF
 
-          # Gradle wrapper
-          mkdir -p gradle/wrapper
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
+          cat > app/src/main/java/com/example/focusreminder/FloatingOrbService.kt << 'EOF'
+          package com.example.focusreminder
+
+          import android.animation.ObjectAnimator
+          import android.animation.ValueAnimator
+          import android.app.*
+          import android.content.Context
+          import android.content.Intent
+          import android.graphics.PixelFormat
+          import android.os.Build
+          import android.os.IBinder
+          import android.view.Gravity
+          import android.view.LayoutInflater
+          import android.view.MotionEvent
+          import android.view.View
+          import android.view.WindowManager
+          import android.view.animation.LinearInterpolator
+          import android.widget.FrameLayout
+          import android.widget.TextView
+          import androidx.core.app.NotificationCompat
+
+          class FloatingOrbService : Service() {
+
+              private lateinit var windowManager: WindowManager
+              private lateinit var orbView: View
+              private lateinit var bubbleView: View
+              private lateinit var bubbleText: TextView
+              private var params: WindowManager.LayoutParams? = null
+              private var bubbleParams: WindowManager.LayoutParams? = null
+
+              override fun onBind(intent: Intent?): IBinder? = null
+
+              override fun onCreate() {
+                  super.onCreate()
+                  startForegroundNotification()
+                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                  createOrb()
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  if (intent?.action == "SHOW_MESSAGE") {
+                      val text = intent.getStringExtra("text") ?: ""
+                      showBubble(text)
+                      shakeOrb()
+                  }
+                  return START_STICKY
+              }
+
+              private fun startForegroundNotification() {
+                  val channelId = "orb_service"
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val nm = getSystemService(NotificationManager::class.java)
+                      nm.createNotificationChannel(NotificationChannel(
+                          channelId, "Floating Orb", NotificationManager.IMPORTANCE_LOW))
+                  }
+                  val notif = NotificationCompat.Builder(this, channelId)
+                      .setContentTitle("Neon Orb ON")
+                      .setContentText("Tomar focus companion")
+                      .setSmallIcon(android.R.drawable.ic_menu_compass)
+                      .setOngoing(true)
+                      .build()
+                  startForeground(2, notif)
+              }
+
+              private fun createOrb() {
+                  val size = (90 * resources.displayMetrics.density).toInt()
+                  val container = FrameLayout(this)
+
+                  orbView = View(this).apply {
+                      background = resources.getDrawable(R.drawable.orb_bg, null)
+                      alpha = 0.95f
+                  }
+                  container.addView(orbView, FrameLayout.LayoutParams(size, size))
+
+                  val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                  else
+                      @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+
+                  params = WindowManager.LayoutParams(
+                      size, size, type,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                      WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                      PixelFormat.TRANSLUCENT
+                  ).apply {
+                      gravity = Gravity.TOP or Gravity.START
+                      x = 60
+                      y = 300
+                  }
+
+                  container.setOnTouchListener(object : View.OnTouchListener {
+                      private var initialX = 0
+                      private var initialY = 0
+                      private var touchX = 0f
+                      private var touchY = 0f
+
+                      override fun onTouch(v: View, event: MotionEvent): Boolean {
+                          when (event.action) {
+                              MotionEvent.ACTION_DOWN -> {
+                                  initialX = params!!.x
+                                  initialY = params!!.y
+                                  touchX = event.rawX
+                                  touchY = event.rawY
+                                  return true
+                              }
+                              MotionEvent.ACTION_MOVE -> {
+                                  params!!.x = initialX + (event.rawX - touchX).toInt()
+                                  params!!.y = initialY + (event.rawY - touchY).toInt()
+                                  windowManager.updateViewLayout(container, params)
+                                  return true
+                              }
+                          }
+                          return false
+                      }
+                  })
+
+                  windowManager.addView(container, params)
+
+                  startPulse(orbView)
+                  startFloat(container)
+                }
+
+              private fun startPulse(view: View) {
+                  val pulse = ObjectAnimator.ofFloat(view, "scaleX", 1f, 1.25f, 1f).apply {
+                      duration = 1400
+                      repeatCount = ValueAnimator.INFINITE
+                      interpolator = LinearInterpolator()
+                  }
+                  val pulseY = ObjectAnimator.ofFloat(view, "scaleY", 1f, 1.25f, 1f).apply {
+                      duration = 1400
+                      repeatCount = ValueAnimator.INFINITE
+                      interpolator = LinearInterpolator()
+                  }
+                  val rot = ObjectAnimator.ofFloat(view, "rotation", 0f, 360f).apply {
+                      duration = 4000
+                      repeatCount = ValueAnimator.INFINITE
+                      interpolator = LinearInterpolator()
+                  }
+                  pulse.start()
+                  pulseY.start()
+                  rot.start()
+              }
+
+              private fun startFloat(view: View) {
+                  val float = ObjectAnimator.ofFloat(view, "translationY", 0f, 30f, 0f).apply {
+                      duration = 2600
+                      repeatCount = ValueAnimator.INFINITE
+                      interpolator = LinearInterpolator()
+                  }
+                  float.start()
+              }
+
+              private fun shakeOrb() {
+                  val shake = ObjectAnimator.ofFloat(orbView, "translationX",
+                      0f, -25f, 25f, -25f, 25f, 0f).apply {
+                      duration = 600
+                      repeatCount = 3
+                  }
+                  shake.start()
+              }
+
+              private fun showBubble(text: String) {
+                  try {
+                      if (bubbleView != null) {
+                          windowManager.removeView(bubbleView)
+                      }
+                  } catch (e: Exception) {}
+
+                  val inflater = LayoutInflater.from(this)
+                  bubbleView = inflater.inflate(R.layout.orb_bubble, null)
+                  bubbleText = bubbleView.findViewById(R.id.bubbleText)
+                  bubbleText.text = text
+
+                  val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                  else
+                      @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+
+                  bubbleParams = WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      type,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                      PixelFormat.TRANSLUCENT
+                  ).apply {
+                      gravity = Gravity.TOP or Gravity.START
+                      x = 40
+                      y = 420
+                  }
+
+                  windowManager.addView(bubbleView, bubbleParams)
+
+                  bubbleView.alpha = 0f
+                  bubbleView.animate().alpha(1f).setDuration(300).start()
+
+                  android.os.Handler(mainLooper).postDelayed({
+                      try {
+                          bubbleView.animate().alpha(0f).setDuration(400).withEndAction {
+                              try { windowManager.removeView(bubbleView) } catch (e: Exception) {}
+                          }.start()
+                      } catch (e: Exception) {}
+                  }, 9000)
+              }
+
+              override fun onDestroy() {
+                  try { if (::orbView.isInitialized) windowManager.removeView(orbView) } catch (e: Exception) {}
+                  try { if (::bubbleView.isInitialized) windowManager.removeView(bubbleView) } catch (e: Exception) {}
+                  super.onDestroy()
+              }
+          }
           EOF
 
-          echo "All files created successfully"
-          find . -type f -name "*.gradle" -o -name "*.kt" -o -name "*.xml" | head -30
+          cat > app/src/main/res/layout/orb_bubble.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:orientation="vertical"
+              android:padding="14dp"
+              android:background="#CC0A0E1A"
+              android:elevation="12dp">
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: FocusReminder-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+              <TextView
+                  android:id="@+id/bubbleText"
+                  android:layout_width="260dp"
+                  android
